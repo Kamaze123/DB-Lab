@@ -1,5 +1,6 @@
 #ifndef NITCBASE_OPENRELTABLE_H
 #define NITCBASE_OPENRELTABLE_H
+#define STUDENTS_RELID 3
 
 #include "../BlockAccess/BlockAccess.h"
 #include "../Buffer/BlockBuffer.h"

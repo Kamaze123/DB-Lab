@@ -1,6 +1,8 @@
 #include "OpenRelTable.h"
+#include "../BlockAccess/BlockAccess.h"
 #include <cstring>
 #include <cstdlib> 
+#include <iostream>
 
 OpenRelTable::OpenRelTable() {
 
@@ -87,6 +89,42 @@ OpenRelTable::OpenRelTable() {
       }
   }
   AttrCacheTable::attrCache[ATTRCAT_RELID] = head2;
+
+  RecBuffer studentsRelCatBlock(4);
+Attribute studentsRelCatRecord[RELCAT_NO_ATTRS];
+studentsRelCatBlock.getRecord(studentsRelCatRecord, 2);
+
+struct RelCacheEntry studentsRelCacheEntry;
+RelCacheTable::recordToRelCatEntry(studentsRelCatRecord, &studentsRelCacheEntry.relCatEntry);
+studentsRelCacheEntry.recId.block = 4;
+studentsRelCacheEntry.recId.slot = 2;
+studentsRelCacheEntry.searchIndex = {-1, -1};
+
+RelCacheTable::relCache[STUDENTS_RELID] = (struct RelCacheEntry*)malloc(sizeof(RelCacheEntry));
+*(RelCacheTable::relCache[STUDENTS_RELID]) = studentsRelCacheEntry;
+
+/************ Setting up Students' Attribute Cache entries ************/
+AttrCacheEntry* studentsHead = nullptr;
+AttrCacheEntry* studentsTail = nullptr;
+
+int studentsAttrSlots[] = {12, 13, 14, 15};
+
+for (int i = 0; i < 4; i++) {
+    RecBuffer attrBlock(5);
+    Attribute attrRecord[ATTRCAT_NO_ATTRS];
+    attrBlock.getRecord(attrRecord, studentsAttrSlots[i]);
+
+    AttrCacheEntry* entry = (AttrCacheEntry*)malloc(sizeof(AttrCacheEntry));
+    AttrCacheTable::recordToAttrCatEntry(attrRecord, &entry->attrCatEntry);
+    entry->recId.block = 5;
+    entry->recId.slot = studentsAttrSlots[i];
+    entry->next = nullptr;
+
+    if (studentsHead == nullptr) { studentsHead = entry; studentsTail = entry; }
+    else { studentsTail->next = entry; studentsTail = entry; }
+}
+AttrCacheTable::attrCache[STUDENTS_RELID] = studentsHead;
+
 }
 
 OpenRelTable::~OpenRelTable() {
@@ -222,6 +260,10 @@ int OpenRelTable::getRelId(char relName[ATTR_SIZE]){
   
   if(strcmp(relName, ATTRCAT_RELNAME) == 0){
     return ATTRCAT_RELID;
+  }
+
+  if(strcmp(relName, "Students") == 0){
+    return STUDENTS_RELID;
   }
 
   return E_RELNOTOPEN;
