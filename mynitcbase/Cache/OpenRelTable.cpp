@@ -147,24 +147,42 @@ OpenRelTable::~OpenRelTable() {
 }
 
 int OpenRelTable::closeRel(int relId) {
-  if (relId < 0 || relId >= MAX_OPEN || relId == RELCAT_RELID || relId == ATTRCAT_RELID) {
-    return E_OUTOFBOUND;   // can't close RELCAT/ATTRCAT — they stay open always
+
+  if(relId == 0 || relId == 1){
+    return E_NOTPERMITTED;
   }
 
-  if (RelCacheTable::relCache[relId] == nullptr) {
+  if(relId < 0 || relId >= MAX_OPEN){
+    return E_OUTOFBOUND;
+  }
+
+  if(tableMetaInfo[relId].free){
     return E_RELNOTOPEN;
+  }
+
+  if (RelCacheTable::relCache[relId]->dirty == true){
+    RelCatEntry relCatBuffer = RelCacheTable::relCache[relId]->relCatEntry;
+    Attribute relCatRecord[RELCAT_NO_ATTRS];
+    RelCacheTable::relCatEntryToRecord(&relCatBuffer, relCatRecord);
+
+    RecId recId = RelCacheTable::relCache[relId]->recId;
+    RecBuffer relCatBlock(recId.block);
+    relCatBlock.setRecord(relCatRecord, recId.slot);
   }
 
   free(RelCacheTable::relCache[relId]);
   RelCacheTable::relCache[relId] = nullptr;
 
-  AttrCacheEntry* entry = AttrCacheTable::attrCache[relId];
-  while (entry != nullptr){
-    AttrCacheEntry* temp = entry;
-    entry = entry->next;
-    free(temp);
+  AttrCacheEntry *head = AttrCacheTable::attrCache[relId];
+  AttrCacheEntry *next = head->next;
+  while (next != nullptr){
+    free(head);
+    head = next;
+    next = next->next;
   }
+  free(head);
   AttrCacheTable::attrCache[relId] = nullptr;
+
   tableMetaInfo[relId].free = true;
 
   return SUCCESS;
