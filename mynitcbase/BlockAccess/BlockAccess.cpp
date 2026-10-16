@@ -474,3 +474,56 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]) {
 
     return SUCCESS;
 }
+
+int BlockAccess::project(int relId, Attribute *record) {
+    RecId prevRecId;
+    RelCacheTable::getSearchIndex(relId, &prevRecId);
+
+    int block, slot;
+
+    if (prevRecId.block == -1 && prevRecId.slot == -1) {
+        // new project operation, start from the first record block
+        RelCatEntry relCatEntry;
+        RelCacheTable::getRelCatEntry(relId, &relCatEntry);
+
+        block = relCatEntry.firstBlk;
+        slot = 0;
+    } else {
+        // operation in progress, continue after the previous record
+        block = prevRecId.block;
+        slot = prevRecId.slot + 1;
+    }
+
+    while (block != -1) {
+        RecBuffer recBuffer(block);
+
+        HeadInfo header;
+        recBuffer.getHeader(&header);
+
+        unsigned char slotMap[header.numSlots];
+        recBuffer.getSlotMap(slotMap);
+
+        if (slot >= header.numSlots) {
+            // no more slots in this block, move to the right block
+            block = header.rblock;
+            slot = 0;
+        } else if (slotMap[slot] == SLOT_UNOCCUPIED) {
+            slot++;
+        } else {
+            // next occupied slot found
+            break;
+        }
+    }
+
+    if (block == -1) {
+        return E_NOTFOUND;
+    }
+
+    RecId nextRecId{block, slot};
+    RelCacheTable::setSearchIndex(relId, &nextRecId);
+
+    RecBuffer recBuffer(nextRecId.block);
+    recBuffer.getRecord(record, nextRecId.slot);
+
+    return SUCCESS;
+}

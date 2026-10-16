@@ -43,22 +43,45 @@ int Frontend::insert_into_table_values(char relname[ATTR_SIZE], int attr_count, 
 
 int Frontend::select_from_table(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE]) {
   // Algebra::project
-  return SUCCESS;
+  return Algebra::project(relname_source, relname_target);
 }
 
-int Frontend::select_attrlist_from_table(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE],
-                                         int attr_count, char attr_list[][ATTR_SIZE]) {
+
+int Frontend::select_attrlist_from_table(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE], int attr_count, char attr_list[][ATTR_SIZE]) {
   // Algebra::project
-  return SUCCESS;
+  return Algebra::project(relname_source,relname_target, attr_count, attr_list);
 }
 
 
-int Frontend::select_attrlist_from_table_where(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE],
-                                               int attr_count, char attr_list[][ATTR_SIZE],
-                                               char attribute[ATTR_SIZE], int op, char value[ATTR_SIZE]) {
-  // Algebra::select + Algebra::project??
-  return SUCCESS;
+int Frontend::select_attrlist_from_table_where( char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE], int attr_count, char attr_list[][ATTR_SIZE], char attribute[ATTR_SIZE], int op, char value[ATTR_SIZE]) {
+    
+  char tempRel[ATTR_SIZE];
+  strcpy(tempRel, TEMP);
+
+  // 2. Call select() of the Algebra Layer to create the intermediate .temp relation
+  int ret = Algebra::select(relname_source, tempRel, attribute, op, value);
+  if (ret != SUCCESS) {
+      return ret;
+  }
+
+  // 3. Open the .temp relation
+  // (Algebra::project requires the source relation to be open)
+  int tempRelId = OpenRelTable::openRel(tempRel);
+  if (tempRelId < 0) {
+      Schema::deleteRel(tempRel);
+      return tempRelId;
+  }
+      // 4. Project from the .temp relation to create the final target relation
+  ret = Algebra::project(tempRel, relname_target, attr_count, attr_list);
+
+  // 5. Clean up: close and delete the temporary relation
+  OpenRelTable::closeRel(tempRelId);
+  Schema::deleteRel(tempRel);
+
+  // 6. Return error codes from project() or SUCCESS
+  return ret;
 }
+
 
 int Frontend::select_from_join_where(char relname_source_one[ATTR_SIZE], char relname_source_two[ATTR_SIZE],
                                      char relname_target[ATTR_SIZE],
