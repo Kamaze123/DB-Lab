@@ -52,11 +52,12 @@ int StaticBuffer::getFreeBuffer(int blockNum){
         }
     }
 
-    int bufferNum;
+    int bufferNum = -1;
 
     for(int i = 0; i < BUFFER_CAPACITY; i++){
         if(metainfo[i].free){
             bufferNum =  i;
+            break;
         }
     }
 
@@ -78,17 +79,15 @@ int StaticBuffer::getFreeBuffer(int blockNum){
     return bufferNum;
 }
 
-int StaticBuffer::getBufferNum(int blockNum){
-    if (blockNum < 0 || blockNum > DISK_BLOCKS) {
+int StaticBuffer::getBufferNum(int blockNum) {
+    if (blockNum < 0 || blockNum >= DISK_BLOCKS) {
         return E_OUTOFBOUND;
     }
-
-    for(int i = 0; i < BUFFER_CAPACITY; i++){
-        if(metainfo[i].blockNum == blockNum){
+    for (int i = 0; i < BUFFER_CAPACITY; i++) {
+        if (!metainfo[i].free && metainfo[i].blockNum == blockNum) {
             return i;
-        }   
+        }
     }
-
     return E_BLOCKNOTINBUFFER;
 }
 

@@ -257,7 +257,7 @@ int OpenRelTable::openRel( char relName[ATTR_SIZE]) {
   RelCacheTable::recordToRelCatEntry(relCatRecord, &relCacheEntry->relCatEntry);
   relCacheEntry->recId = relcatRecId;
   relCacheEntry->searchIndex = {-1,-1};
-
+  relCacheEntry->dirty = false;
   RelCacheTable::relCache[relId] = relCacheEntry;
   /****** Setting up Attribute Cache entry for the relation ******/
 

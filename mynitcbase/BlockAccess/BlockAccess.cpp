@@ -41,11 +41,17 @@ RecId BlockAccess::linearSearch(int relId, char attrName[ATTR_SIZE], union Attri
         RelCacheTable::getRelCatEntry(relId, &relCatEntry);
 
         Attribute record[relCatEntry.numAttrs];
-        recBuffer.getRecord(record, slot);
+        
         // get header of the block using RecBuffer::getHeader() function
         HeadInfo head;
         recBuffer.getHeader(&head);
-        // get slot map of the block using RecBuffer::getSlotMap() function
+
+        if (slot >= head.numSlots) {
+            block = head.rblock;
+            slot = 0;
+            continue;  
+        }
+
         unsigned char slotMap[head.numSlots];
         recBuffer.getSlotMap(slotMap);
         
@@ -61,7 +67,7 @@ RecId BlockAccess::linearSearch(int relId, char attrName[ATTR_SIZE], union Attri
             slot++;
             continue;
         }
-
+        recBuffer.getRecord(record, slot);
         // compare record's attribute value to the the given attrVal as below:
         /*
             firstly get the attribute offset for the attrName attribute
@@ -438,6 +444,7 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]) {
             }
 
             attrCatBlock.releaseBlock();
+            RelCacheTable::resetSearchIndex(ATTRCAT_RELID);
         }
 
         // (index destruction via BPlusTree::bPlusDestroy omitted: no indexing yet)

@@ -12,22 +12,22 @@ RecBuffer::RecBuffer(int blockNum) : BlockBuffer::BlockBuffer(blockNum) {}
 RecBuffer::RecBuffer() : BlockBuffer('R'){} 
 
 // load the block header into the argument pointer
-int BlockBuffer::getHeader(struct HeadInfo *head){
-    
+int BlockBuffer::getHeader(struct HeadInfo *head) {
     unsigned char *bufferPtr;
     int ret = loadBlockAndGetBufferPtr(&bufferPtr);
-    if(ret != SUCCESS){
+    if (ret != SUCCESS) {
         return ret;
     }
 
-    // populate the numEntries, numAttrs and numSlots fields in *head
-    memcpy(&head->numSlots, bufferPtr + 24, 4);
+    memcpy(&head->blockType,  bufferPtr + 0,  4);
+    memcpy(&head->pblock,     bufferPtr + 4,  4);
+    memcpy(&head->lblock,     bufferPtr + 8,  4);
+    memcpy(&head->rblock,     bufferPtr + 12, 4);
     memcpy(&head->numEntries, bufferPtr + 16, 4);
-    memcpy(&head->numAttrs, bufferPtr + 20, 4);
-    memcpy(&head->rblock, bufferPtr + 12, 4);
-    memcpy(&head->lblock, bufferPtr + 8, 4);
+    memcpy(&head->numAttrs,   bufferPtr + 20, 4);
+    memcpy(&head->numSlots,   bufferPtr + 24, 4);
 
-    return SUCCESS; 
+    return SUCCESS;
 }
 
 int RecBuffer::getSlotMap(unsigned char *slotMap) {
@@ -151,31 +151,22 @@ int RecBuffer::setRecord(union Attribute *rec, int slotNum) {
     return SUCCESS;
 }
 
-int BlockBuffer::setHeader(struct HeadInfo *head){
-
+int BlockBuffer::setHeader(struct HeadInfo *head) {
     unsigned char *bufferPtr;
-    int retval = loadBlockAndGetBufferPtr(&bufferPtr);
-
-    if(retval != SUCCESS){
-        return retval;
+    int ret = loadBlockAndGetBufferPtr(&bufferPtr);
+    if (ret != SUCCESS) {
+        return ret;
     }
 
-    struct HeadInfo *bufferHeader = (struct HeadInfo *)bufferPtr;
+    memcpy(bufferPtr + 0,  &head->blockType,  4);
+    memcpy(bufferPtr + 4,  &head->pblock,     4);
+    memcpy(bufferPtr + 8,  &head->lblock,     4);
+    memcpy(bufferPtr + 12, &head->rblock,     4);
+    memcpy(bufferPtr + 16, &head->numEntries, 4);
+    memcpy(bufferPtr + 20, &head->numAttrs,   4);
+    memcpy(bufferPtr + 24, &head->numSlots,   4);
 
-    bufferHeader->blockType = head->blockType;
-    bufferHeader->pblock = head->pblock;
-    bufferHeader->lblock = head->lblock;
-    bufferHeader->rblock = head->rblock;
-    bufferHeader->numEntries = head->numEntries;
-    bufferHeader->numAttrs = head->numAttrs;
-    bufferHeader->numSlots = head->numSlots;
-
-    retval = StaticBuffer::setDirtyBit(this->blockNum);
-    if(retval != SUCCESS){
-        return retval;
-    }
-
-    return SUCCESS;
+    return StaticBuffer::setDirtyBit(this->blockNum);
 }
 
 int BlockBuffer::setBlockType(int blockType){
@@ -198,29 +189,28 @@ int BlockBuffer::setBlockType(int blockType){
     return SUCCESS;
 }
 
-int BlockBuffer::getFreeBlock(int blockType){
+int BlockBuffer::getFreeBlock(int blockType) {
 
-    int freeblk = -1;
-
-    for(int i = 0; i < DISK_BLOCKS; i++){
-        if(StaticBuffer::blockAllocMap[i] == UNUSED_BLK){
-            freeblk = i;
+    int freeBlock = -1;
+    for (int i = 0; i < DISK_BLOCKS; i++) {
+        if (StaticBuffer::blockAllocMap[i] == UNUSED_BLK) {
+            freeBlock = i;
             break;
         }
     }
-
-    if(freeblk == -1){
+    if (freeBlock == -1) {
         return E_DISKFULL;
     }
 
-    this->blockNum = freeblk;
+    this->blockNum = freeBlock;
 
-    int buffernum = StaticBuffer::getFreeBuffer(this->blockNum);
-    if(buffernum < 0){
-        return buffernum;
+    int bufferNum = StaticBuffer::getFreeBuffer(this->blockNum);
+    if (bufferNum < 0) {
+        return bufferNum;
     }
 
     struct HeadInfo head;
+    head.blockType = blockType;
     head.pblock = -1;
     head.lblock = -1;
     head.rblock = -1;
@@ -228,18 +218,18 @@ int BlockBuffer::getFreeBlock(int blockType){
     head.numAttrs = 0;
     head.numSlots = 0;
     setHeader(&head);
-    
+
     setBlockType(blockType);
 
-    return freeblk;
+    return freeBlock;
 }
 
 BlockBuffer::BlockBuffer(char blockType){
     int blockTypeint;
 
-    if(blockTypeint == 'R'){
+    if(blockType == 'R'){
         blockTypeint = REC;
-    }else if(blockTypeint == 'I'){
+    }else if(blockType == 'I'){
         blockTypeint = IND_INTERNAL;
     }else{
         blockTypeint = IND_LEAF;
