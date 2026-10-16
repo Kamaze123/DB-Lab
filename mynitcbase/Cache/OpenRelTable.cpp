@@ -128,21 +128,45 @@ OpenRelTable::~OpenRelTable() {
 
   for (int i = 2; i < MAX_OPEN; ++i) {
     if (!tableMetaInfo[i].free) {
-      OpenRelTable::closeRel(i); // we will implement this function later
+      OpenRelTable::closeRel(i); 
     }
   }
 
-  for (int relId = 0; relId < 2; relId++) {  // RELCAT_RELID and ATTRCAT_RELID
-    // free the RelCacheEntry allocated for this relId
-    free(RelCacheTable::relCache[relId]);
-
-    // free the linked list of AttrCacheEntry nodes for this relId
-    AttrCacheEntry* entry = AttrCacheTable::attrCache[relId];
-    while (entry != nullptr) {
-      AttrCacheEntry* temp = entry;
-      entry = entry->next;
-      free(temp);
+  // attribute catalog's relcache entry
+  if (RelCacheTable::relCache[ATTRCAT_RELID] != nullptr) {
+    if (RelCacheTable::relCache[ATTRCAT_RELID]->dirty) {
+      Attribute record[RELCAT_NO_ATTRS];
+      RelCacheTable::relCatEntryToRecord( &(RelCacheTable::relCache[ATTRCAT_RELID]->relCatEntry), record);
+      RecId recId = RelCacheTable::relCache[ATTRCAT_RELID]->recId;
+      RecBuffer relCatBlock(recId.block);
+      relCatBlock.setRecord(record, recId.slot);
     }
+    free(RelCacheTable::relCache[ATTRCAT_RELID]);
+    RelCacheTable::relCache[ATTRCAT_RELID] = nullptr;
+  }
+
+  // relation catalog's relcache entry
+  if (RelCacheTable::relCache[RELCAT_RELID] != nullptr){
+    if(RelCacheTable::relCache[RELCAT_RELID]->dirty){
+      Attribute record[RELCAT_NO_ATTRS];
+      RelCacheTable::relCatEntryToRecord(&(RelCacheTable::relCache[RELCAT_RELID]->relCatEntry), record);
+      RecId recId = RelCacheTable::relCache[RELCAT_RELID]->recId;
+      RecBuffer relCatBlock(recId.block);
+      relCatBlock.setRecord(record, recId.slot);
+    }
+    free(RelCacheTable::relCache[RELCAT_RELID]);
+    RelCacheTable::relCache[RELCAT_RELID] = nullptr;
+  }
+
+  // free the attribute cache linked lists of both catalogs
+  for (int relId = RELCAT_RELID; relId <= ATTRCAT_RELID; relId++) {
+    AttrCacheEntry *entry = AttrCacheTable::attrCache[relId];
+    while (entry != nullptr) {
+      AttrCacheEntry *next = entry->next;
+      free(entry);
+      entry = next;
+    }
+    AttrCacheTable::attrCache[relId] = nullptr;
   }
 }
 
