@@ -23,7 +23,7 @@ int Frontend::alter_table_rename(char relname_from[ATTR_SIZE], char relname_to[A
   return Schema::renameRel(relname_from, relname_to);
 }
 
-int Frontend::alter_table_rename_column(char relname[ATTR_SIZE], char attrname_from[ATTR_SIZE], char attrname_to[ATTR_SIZE]) {
+int Frontend::alter_table_rename_column(char relname[ATTR_SIZE], char attrname_from[ATTR_SIZE], char attrname_to[ATTR_SIZE]){
   return Schema::renameAttr(relname, attrname_from, attrname_to);
 }
 
@@ -42,22 +42,42 @@ int Frontend::insert_into_table_values(char relname[ATTR_SIZE], int attr_count, 
 }
 
 int Frontend::select_from_table(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE]) {
-  // Algebra::project
-  return SUCCESS;
+  // Call Algebra::project to copy all attributes and records to the target relation
+  return Algebra::project(relname_source, relname_target);
 }
 
 int Frontend::select_attrlist_from_table(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE],
                                          int attr_count, char attr_list[][ATTR_SIZE]) {
-  // Algebra::project
-  return SUCCESS;
+  // Call Algebra::project with the specified attribute list to create the projected relation
+  return Algebra::project(relname_source, relname_target, attr_count, attr_list);
 }
 
 
 int Frontend::select_attrlist_from_table_where(char relname_source[ATTR_SIZE], char relname_target[ATTR_SIZE],
                                                int attr_count, char attr_list[][ATTR_SIZE],
                                                char attribute[ATTR_SIZE], int op, char value[ATTR_SIZE]) {
-  // Algebra::select + Algebra::project??
-  return SUCCESS;
+  // Step 1: Call select() method of the Algebra Layer to create an intermediate relation ".temp" (TEMP)
+  // containing all matching records from the source relation
+  int ret = Algebra::select(relname_source, (char *)TEMP, attribute, op, value);
+  if (ret != SUCCESS) {
+    return ret;
+  }
+
+  // Step 2: Open the temporary relation ".temp"
+  int tempRelId = OpenRelTable::openRel((char *)TEMP);
+  if (tempRelId < 0) {
+    Schema::deleteRel((char *)TEMP);
+    return tempRelId;
+  }
+
+  // Step 3: Project the specified attributes from the temporary relation into the final target relation
+  ret = Algebra::project((char *)TEMP, relname_target, attr_count, attr_list);
+
+  // Step 4: Clean up by closing and deleting the temporary relation ".temp"
+  OpenRelTable::closeRel(tempRelId);
+  Schema::deleteRel((char *)TEMP);
+
+  return ret;
 }
 
 int Frontend::select_from_join_where(char relname_source_one[ATTR_SIZE], char relname_source_two[ATTR_SIZE],

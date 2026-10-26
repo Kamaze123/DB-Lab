@@ -10,6 +10,12 @@ BlockBuffer::BlockBuffer(int blockNum) {
 // calls the parent class constructor
 RecBuffer::RecBuffer(int blockNum) : BlockBuffer::BlockBuffer(blockNum) {}
 RecBuffer::RecBuffer() : BlockBuffer('R'){} 
+IndBuffer::IndBuffer(char blockType) : BlockBuffer(blockType){}
+IndBuffer::IndBuffer(int blockNum) : BlockBuffer(blockNum){}
+IndLeaf::IndLeaf() : IndBuffer('L'){} 
+IndLeaf::IndLeaf(int blockNum) : IndBuffer(blockNum){}
+IndInternal::IndInternal() : IndBuffer('I') {}
+IndInternal::IndInternal(int blockNum) : IndBuffer(blockNum) {}
 
 // load the block header into the argument pointer
 int BlockBuffer::getHeader(struct HeadInfo *head) {
@@ -286,3 +292,57 @@ void BlockBuffer::releaseBlock(){
     StaticBuffer::blockAllocMap[this->blockNum] = UNUSED_BLK;
     this->blockNum = INVALID_BLOCKNUM;
 }
+
+int IndInternal::getEntry(void *ptr, int indexNum) {
+
+    if(indexNum < 0 || indexNum > MAX_KEYS_INTERNAL-1){
+        return E_OUTOFBOUND;
+    }
+
+    unsigned char *bufferPtr;
+    int retval = loadBlockAndGetBufferPtr(&bufferPtr);
+
+    if(retval != SUCCESS){
+        return retval;
+    }
+
+    struct InternalEntry *internalEntry = (struct InternalEntry *)ptr;
+
+    /* the indexNum'th entry will begin at an offset of
+       HEADER_SIZE + (indexNum * (sizeof(int) + ATTR_SIZE) )         [why?]
+       from bufferPtr */
+    unsigned char *entryPtr = bufferPtr + HEADER_SIZE + (indexNum * 20);
+
+    memcpy(&(internalEntry->lChild), entryPtr, sizeof(int32_t));
+    memcpy(&(internalEntry->attrVal), entryPtr + 4, sizeof(Attribute));
+    memcpy(&(internalEntry->rChild), entryPtr + 20, 4);
+
+    return SUCCESS;
+}
+
+int IndLeaf::getEntry(void *ptr, int indexNum) {
+
+    if (indexNum < 0 || indexNum > MAX_KEYS_LEAF - 1) {
+        return E_OUTOFBOUND;
+    }
+
+    unsigned char *bufferPtr;
+    int ret = loadBlockAndGetBufferPtr(&bufferPtr);
+    if (ret != SUCCESS) {
+        return ret;
+    }
+
+    unsigned char *entryPtr = bufferPtr + HEADER_SIZE + (indexNum * LEAF_ENTRY_SIZE);
+    memcpy((struct Index *)ptr, entryPtr, LEAF_ENTRY_SIZE);
+
+    return SUCCESS;
+}
+
+int IndInternal::setEntry(void *ptr, int indexNum) {
+  return 0;
+}
+
+int IndLeaf::setEntry(void *ptr, int indexNum) {
+  return 0;
+}
+

@@ -338,19 +338,30 @@ int BlockAccess::insert(int relId, Attribute *record) {
 }
 
 int BlockAccess::search(int relId, Attribute *record, char attrName[ATTR_SIZE], Attribute attrVal, int op) {
-    // find the matching record id
-    RecId recId = BlockAccess::linearSearch(relId, attrName, attrVal, op);
+    RecId recId;
+    AttrCatEntry attrcatentry;
 
-    // no record satisfies the condition
-    if (recId.block == -1 && recId.slot == -1) {
+    int ret = AttrCacheTable::getAttrCatEntry(relId, attrName, &attrcatentry);
+
+    if(ret != SUCCESS){
+        return ret;
+    }
+
+    int rootblk = attrcatentry.rootBlock;
+    if(rootblk == -1){
+        recId = linearSearch(relId, attrName, attrVal, op);
+    }else{
+        recId = BPlusTree::bPlusSearch(relId, attrName, attrVal, op);
+    }
+
+    if(recId.block == -1 && recId.slot == -1){
         return E_NOTFOUND;
     }
 
-    // fetch the record into the caller's buffer
-    RecBuffer recBuffer(recId.block);
-    recBuffer.getRecord(record, recId.slot);
+    RecBuffer recbuffer(recId.block);
+    recbuffer.getRecord(record, recId.slot);
 
-    return SUCCESS;
+    return SUCCESS; 
 }
 
 int BlockAccess::deleteRelation(char relName[ATTR_SIZE]) {
@@ -471,6 +482,69 @@ int BlockAccess::deleteRelation(char relName[ATTR_SIZE]) {
     RelCacheTable::getRelCatEntry(ATTRCAT_RELID, &attrCatEntry);
     attrCatEntry.numRecs -= numberOfAttributesDeleted;
     RelCacheTable::setRelCatEntry(ATTRCAT_RELID, &attrCatEntry);
+
+    return SUCCESS;
+}
+
+int BlockAccess::project(int relId, Attribute *record) {
+    // Get the previous search index of the relation from the relation cache
+    RecId prevRecId;
+    RelCacheTable::getSearchIndex(relId, &prevRecId);
+
+    // block and slot store the record id of the slot to check
+    int block, slot;
+
+    // If search index is {-1, -1}, start searching from the beginning of relation
+    if (prevRecId.block == -1 && prevRecId.slot == -1) {
+        RelCatEntry relCatBuf;
+        RelCacheTable::getRelCatEntry(relId, &relCatBuf);
+
+        block = relCatBuf.firstBlk;
+        slot = 0;
+    } else {
+        // Continue from the record after the previous search index
+        block = prevRecId.block;
+        slot = prevRecId.slot + 1;
+    }
+
+    // Iterate through the records to find the next occupied slot
+    while (block != -1) {
+        RecBuffer recBuffer(block);
+
+        HeadInfo head;
+        recBuffer.getHeader(&head);
+
+        // If slot exceeds the number of slots in the block, move to the right block
+        if (slot >= head.numSlots) {
+            block = head.rblock;
+            slot = 0;
+            continue;
+        }
+
+        unsigned char slotMap[head.numSlots];
+        recBuffer.getSlotMap(slotMap);
+
+        // If the slot is empty, check the next slot
+        if (slotMap[slot] == SLOT_UNOCCUPIED) {
+            slot++;
+        } else {
+            // Next occupied slot/record found
+            break;
+        }
+    }
+
+    // If block == -1, all records have been exhausted
+    if (block == -1) {
+        return E_NOTFOUND;
+    }
+
+    // Update the search index to the found record id
+    RecId nextRecId{block, slot};
+    RelCacheTable::setSearchIndex(relId, &nextRecId);
+
+    // Read the record from the block into the caller's record buffer
+    RecBuffer recordBuffer(block);
+    recordBuffer.getRecord(record, slot);
 
     return SUCCESS;
 }

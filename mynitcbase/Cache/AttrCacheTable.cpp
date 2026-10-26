@@ -51,3 +51,103 @@ void AttrCacheTable::recordToAttrCatEntry(union Attribute record[ATTRCAT_NO_ATTR
     attrCatEntry->rootBlock = record[ATTRCAT_ROOT_BLOCK_INDEX].nVal;
     attrCatEntry->offset = record[ATTRCAT_OFFSET_INDEX].nVal;
 }
+
+int AttrCacheTable::getSearchIndex(int relId, char attrName[ATTR_SIZE], IndexId *searchIndex) {
+
+  if(relId < 0 || relId > MAX_OPEN-1) {
+    return E_OUTOFBOUND;
+  }
+
+  if(attrCache[relId] == nullptr) {
+    return E_RELNOTOPEN;
+  }
+
+  for(AttrCacheEntry* entry = attrCache[relId]; entry != nullptr; entry = entry->next)
+  {
+    if (strcmp(entry->attrCatEntry.attrName,attrName) == 0)
+    {
+      *searchIndex = entry->searchIndex;
+      return SUCCESS;
+    }
+  }
+
+  return E_ATTRNOTEXIST;
+}
+
+int AttrCacheTable::getSearchIndex(int relId, int attrOffset, IndexId *searchIndex) {
+
+  if(relId < 0 || relId > MAX_OPEN-1) {
+    return E_OUTOFBOUND;
+  }
+
+  if(attrCache[relId] == nullptr) {
+    return E_RELNOTOPEN;
+  }
+
+  for(AttrCacheEntry* entry = attrCache[relId]; entry != nullptr; entry = entry->next)
+  {
+    if (entry->attrCatEntry.offset == attrOffset)
+    {
+      searchIndex = &entry->searchIndex;
+      return SUCCESS;
+    }
+  }
+
+  return E_ATTRNOTEXIST;
+}
+
+int AttrCacheTable::setSearchIndex(int relId, char attrName[ATTR_SIZE], IndexId *searchIndex) {
+
+  if(relId < 0 || relId > MAX_OPEN-1) {
+    return E_OUTOFBOUND;
+  }
+
+  if(attrCache[relId] == nullptr) {
+    return E_RELNOTOPEN;
+  }
+
+  for(AttrCacheEntry* entry = attrCache[relId]; entry != nullptr; entry = entry->next)
+  {
+    if (strcmp(entry->attrCatEntry.attrName,attrName) == 0)
+    {
+        entry->searchIndex = *searchIndex;
+        return SUCCESS;
+    }
+  }
+
+  return E_ATTRNOTEXIST;
+}
+
+int AttrCacheTable::setSearchIndex(int relId, int attrOffset, IndexId *searchIndex) {
+
+  if(relId < 0 || relId > MAX_OPEN-1) {
+    return E_OUTOFBOUND;
+  }
+
+  if(attrCache[relId] == nullptr) {
+    return E_RELNOTOPEN;
+  }
+
+  for(AttrCacheEntry* entry = attrCache[relId]; entry != nullptr; entry = entry->next)
+  {
+    if (entry->attrCatEntry.offset == attrOffset)
+    {
+        entry->searchIndex = *searchIndex;
+        return SUCCESS;
+    }
+  }
+
+  return E_ATTRNOTEXIST;
+}
+
+int AttrCacheTable::resetSearchIndex(int relId, char attrName[ATTR_SIZE]) {
+    IndexId indexid = {-1,-1};
+    int ret = setSearchIndex(relId, attrName, &indexid);
+    return ret;
+}
+
+int AttrCacheTable::resetSearchIndex(int relId, int attrOffset) {
+    IndexId indexid = {-1,-1};
+    int ret = setSearchIndex(relId, attrOffset, &indexid);
+    return ret;
+}
