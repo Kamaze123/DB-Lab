@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include <cstring>
 
+int numComparisons = 0;
+
 BlockBuffer::BlockBuffer(int blockNum) {
     // initialise this.blockNum with the argument
     this->blockNum = blockNum;
@@ -118,6 +120,7 @@ int BlockBuffer::loadBlockAndGetBufferPtr(unsigned char **buffPtr){
 }
 
 int compareAttrs(union Attribute attr1, union Attribute attr2, int attrType) {
+    numComparisons++;
     double diff;
     if(attrType == STRING){
         diff = strcmp(attr1.sVal, attr2.sVal);

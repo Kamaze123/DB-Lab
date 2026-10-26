@@ -64,6 +64,8 @@ int Algebra::select(char srcRel[ATTR_SIZE], char targetRel[ATTR_SIZE], char attr
   RelCacheTable::resetSearchIndex(srcRelId);
   AttrCacheTable::resetSearchIndex(srcRelId, attr);
 
+  numComparisons = 0;
+
   // Search each record matching the condition and insert it into the target relation
   while (BlockAccess::search(srcRelId, record, attr, attrVal, op) == SUCCESS) {
     ret = BlockAccess::insert(targetRelId, record);
@@ -73,6 +75,8 @@ int Algebra::select(char srcRel[ATTR_SIZE], char targetRel[ATTR_SIZE], char attr
       return ret;
     }
   }
+
+  printf("Number of comparisons: %d\n", numComparisons);
 
   // Close target relation after insertion
   Schema::closeRel(targetRel);

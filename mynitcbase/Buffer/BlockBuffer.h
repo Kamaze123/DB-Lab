@@ -92,4 +92,6 @@ class IndLeaf : public IndBuffer {
   int setEntry(void *ptr, int indexNum);
 };
 
+extern int numComparisons;
+
 #endif  // NITCBASE_BLOCKBUFFER_H
