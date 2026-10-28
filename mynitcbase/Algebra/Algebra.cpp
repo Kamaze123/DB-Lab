@@ -1,4 +1,5 @@
 #include "Algebra.h"
+#include "../BPlusTree/BPlusTree.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -253,4 +254,136 @@ int Algebra::insert(char relName[ATTR_SIZE], int nAttrs, char record[][ATTR_SIZE
 
   int retVal = BlockAccess::insert(relId, recordValues);
   return retVal;
+}
+
+int Algebra::join(char srcRelOne[ATTR_SIZE], char srcRelTwo[ATTR_SIZE], char targetRel[ATTR_SIZE],
+                  char attrOne[ATTR_SIZE], char attrTwo[ATTR_SIZE]) {
+  // Get relation IDs for both source relations
+  int srcRelId1 = OpenRelTable::getRelId(srcRelOne);
+  int srcRelId2 = OpenRelTable::getRelId(srcRelTwo);
+
+  if (srcRelId1 == E_RELNOTOPEN || srcRelId2 == E_RELNOTOPEN) {
+    return E_RELNOTOPEN;
+  }
+
+  // Fetch attribute catalog entries for the join attributes
+  AttrCatEntry attrCatEntry1, attrCatEntry2;
+  int ret1 = AttrCacheTable::getAttrCatEntry(srcRelId1, attrOne, &attrCatEntry1);
+  int ret2 = AttrCacheTable::getAttrCatEntry(srcRelId2, attrTwo, &attrCatEntry2);
+
+  if (ret1 != SUCCESS || ret2 != SUCCESS) {
+    return E_ATTRNOTEXIST;
+  }
+
+  if (attrCatEntry1.attrType != attrCatEntry2.attrType) {
+    return E_ATTRTYPEMISMATCH;
+  }
+
+  // Fetch relation catalog entries to get attribute counts
+  RelCatEntry relCatEntry1, relCatEntry2;
+  RelCacheTable::getRelCatEntry(srcRelId1, &relCatEntry1);
+  RelCacheTable::getRelCatEntry(srcRelId2, &relCatEntry2);
+
+  int numOfAttributes1 = relCatEntry1.numAttrs;
+  int numOfAttributes2 = relCatEntry2.numAttrs;
+
+  // Check for duplicate attribute names between the two relations, excluding the join attributes
+  for (int i = 0; i < numOfAttributes1; i++) {
+    AttrCatEntry a1;
+    AttrCacheTable::getAttrCatEntry(srcRelId1, i, &a1);
+    for (int j = 0; j < numOfAttributes2; j++) {
+      AttrCatEntry a2;
+      AttrCacheTable::getAttrCatEntry(srcRelId2, j, &a2);
+      if (strcmp(a1.attrName, a2.attrName) == 0) {
+        if (strcmp(a1.attrName, attrOne) == 0 && strcmp(a2.attrName, attrTwo) == 0) {
+          continue;
+        }
+        return E_DUPLICATEATTR;
+      }
+    }
+  }
+
+  // If rel2 does not have an index on attr2, create it
+  if (attrCatEntry2.rootBlock == -1) {
+    int ret = BPlusTree::bPlusCreate(srcRelId2, attrTwo);
+    if (ret != SUCCESS) {
+      return ret;
+    }
+  }
+
+  // Define schema for the target relation (columns from rel1, then rel2 excluding attrTwo)
+  int numOfAttributesInTarget = numOfAttributes1 + numOfAttributes2 - 1;
+  char targetRelAttrNames[numOfAttributesInTarget][ATTR_SIZE];
+  int targetRelAttrTypes[numOfAttributesInTarget];
+
+  for (int i = 0; i < numOfAttributes1; i++) {
+    AttrCatEntry entry;
+    AttrCacheTable::getAttrCatEntry(srcRelId1, i, &entry);
+    strcpy(targetRelAttrNames[i], entry.attrName);
+    targetRelAttrTypes[i] = entry.attrType;
+  }
+
+  int targetIdx = numOfAttributes1;
+  for (int j = 0; j < numOfAttributes2; j++) {
+    AttrCatEntry entry;
+    AttrCacheTable::getAttrCatEntry(srcRelId2, j, &entry);
+    if (strcmp(entry.attrName, attrTwo) == 0) {
+      continue;
+    }
+    strcpy(targetRelAttrNames[targetIdx], entry.attrName);
+    targetRelAttrTypes[targetIdx] = entry.attrType;
+    targetIdx++;
+  }
+
+  // Create target relation
+  int ret = Schema::createRel(targetRel, numOfAttributesInTarget, targetRelAttrNames, targetRelAttrTypes);
+  if (ret != SUCCESS) {
+    return ret;
+  }
+
+  // Open the newly created target relation
+  int targetRelId = OpenRelTable::openRel(targetRel);
+  if (targetRelId < 0) {
+    Schema::deleteRel(targetRel);
+    return targetRelId;
+  }
+
+  // Scan srcRel1 and search matching records in srcRel2
+  Attribute record1[numOfAttributes1];
+  Attribute record2[numOfAttributes2];
+  Attribute targetRecord[numOfAttributesInTarget];
+
+  RelCacheTable::resetSearchIndex(srcRelId1);
+
+  while (BlockAccess::project(srcRelId1, record1) == SUCCESS) {
+    RelCacheTable::resetSearchIndex(srcRelId2);
+    AttrCacheTable::resetSearchIndex(srcRelId2, attrTwo);
+
+    while (BlockAccess::search(srcRelId2, record2, attrTwo, record1[attrCatEntry1.offset], EQ) == SUCCESS) {
+      // Copy attributes of record1
+      for (int i = 0; i < numOfAttributes1; i++) {
+        targetRecord[i] = record1[i];
+      }
+
+      // Copy attributes of record2 excluding attrTwo
+      int tIdx = numOfAttributes1;
+      for (int j = 0; j < numOfAttributes2; j++) {
+        if (j == attrCatEntry2.offset) {
+          continue;
+        }
+        targetRecord[tIdx] = record2[j];
+        tIdx++;
+      }
+
+      int insertRet = BlockAccess::insert(targetRelId, targetRecord);
+      if (insertRet != SUCCESS) {
+        OpenRelTable::closeRel(targetRelId);
+        Schema::deleteRel(targetRel);
+        return E_DISKFULL;
+      }
+    }
+  }
+
+  OpenRelTable::closeRel(targetRelId);
+  return SUCCESS;
 }
