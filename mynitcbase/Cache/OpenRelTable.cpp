@@ -197,16 +197,22 @@ int OpenRelTable::closeRel(int relId) {
   free(RelCacheTable::relCache[relId]);
   RelCacheTable::relCache[relId] = nullptr;
 
-  AttrCacheEntry *head = AttrCacheTable::attrCache[relId];
-  AttrCacheEntry *next = head->next;
-  while (next != nullptr){
-    free(head);
-    head = next;
-    next = next->next;
-  }
-  free(head);
-  AttrCacheTable::attrCache[relId] = nullptr;
+  AttrCacheEntry *entry = AttrCacheTable::attrCache[relId];
+  while(entry != nullptr){
+    if (entry->dirty){
+      Attribute attrCatRecord[ATTRCAT_NO_ATTRS];
+      AttrCacheTable::attrCatEntryToRecord(&(entry->attrCatEntry), attrCatRecord);
 
+      RecBuffer attrCatBlock(entry->recId.block);
+      attrCatBlock.setRecord(attrCatRecord, entry->recId.slot);
+    }
+
+    AttrCacheEntry *next = entry->next;
+    free(entry);
+    entry = next;
+  }
+  
+  AttrCacheTable::attrCache[relId] = nullptr;
   tableMetaInfo[relId].free = true;
 
   return SUCCESS;
@@ -296,6 +302,8 @@ int OpenRelTable::openRel( char relName[ATTR_SIZE]) {
       AttrCacheTable::recordToAttrCatEntry(attrCatRecord, &attrCacheEntry->attrCatEntry);
       attrCacheEntry->recId = attrcatRecId;
       attrCacheEntry->next = nullptr;
+      attrCacheEntry->dirty = false;
+      attrCacheEntry->searchIndex = {-1,-1};
 
       if(listHead == nullptr){
         listHead = attrCacheEntry;
